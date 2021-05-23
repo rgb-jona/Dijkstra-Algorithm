@@ -13,8 +13,8 @@ into the console
 # imports to make life easier
 import random
 import platform
-import sys
 import matplotlib.pyplot as plt
+import networkx as nx
 
 class Solver:
     """Class using the dijkstra algorithm on a dataset created by the Randomizer-class"""
@@ -44,18 +44,26 @@ class Solver:
 
         # choose a random start node out of node array and pop it out of the array
         self.__start_node = self.__node_array.pop(random.randint(0, len(self.__node_array)-1))
-        # call solve with the chosen start node
-        self.solve(self.__start_node)
 
-        # debug print
-        print("Start node: " + self.__start_node.get_name())
-        print()
+        # call solve with the chosen start node
+        self.__solve(self.__start_node)
+
+        # general result print
+        print("Start node: " + self.__start_node.get_name()+"\n")
         for element in self.__node_dic:
             print(self.__node_dic.get(element))
-        if self.__use_graphics:
-            self.__plot_network()
 
-    def solve(self, node):
+        # if graphics can be plotted let user select a node to plot the shortest path to from the start node
+        if self.__use_graphics:
+            while True:
+                # let user select end node
+                end_node_name = input("\nPlease type in name of desired end node to show path to:\n")
+                while len(end_node_name) != 1 or str(end_node_name) not in self.__node_dic or end_node_name is self.__start_node.get_name():
+                    end_node_name = input("\n\nNode name not valid, please retry.\nPlease type in name of end node to show path to:\n")
+                # plot the path marked
+                self.__plot_path_to(end_node_name)
+
+    def __solve(self, node):
         # take connections of the nodes and compare the connected values
         for element in node.get_connections():
             # get node which is connection to out of dictionary
@@ -102,44 +110,68 @@ class Solver:
         del temp_node_array
         # perform solve on the node with the smallest value not equalling 0 out of self.__node_array
         # also popping it out of self.__node_array to get a exit condition for the recursive function
-        self.solve(self.__node_array.pop(self.__node_array.index(node_with_smallest_value)))
+        self.__solve(self.__node_array.pop(self.__node_array.index(node_with_smallest_value)))
 
-    def __plot_network(self):
+    def __plot_path_to(self, end_node_name):
         """function to plot the given data into a figure to help orienting"""
-        # this should be made better later:
-        import networkx as nx
-        # check if networkx is imported
-        if "networkx" not in sys.modules:
-            raise ModuleNotFoundError
-
         # create graph
         plot = nx.Graph()
+
         # add node for each node in self.__node_dic
         for element in self.__node_dic:
             current_node = self.__node_dic.get(element)
             current_node_name = current_node.get_name()
             plot.add_node(current_node_name, label=current_node_name, node_size=500)
 
+        # get the result of the dijkstra for the selected node
+        current_path_node = self.__node_dic.get(end_node_name)
+        result_path = []
+        while current_path_node.get_name() is not self.__start_node.get_name():
+            previous_node = self.__node_dic.get(current_path_node.get_previous_node())
+            result_path.append((current_path_node.get_name(),previous_node.get_name()))
+            current_path_node = previous_node
+
         # add edges between all the nodes
-        for element in self.__node_dic:
-            # get current node out of self.__node_dic
-            current_node = self.__node_dic.get(element)
+        for current_node in list(self.__node_dic.values()):
             # extract connections
             current_node_connections = current_node.get_connections()
             # draw connections
-            for element in current_node_connections:
-                plot.add_edge(current_node.get_name(), element
-                              , label=current_node.get_connections().get(element))
+            for connection_end_node_name in current_node_connections:
+                # check if connection already exists and continue
+                # if that is the case
+                if plot.has_edge(connection_end_node_name, current_node.get_name()):
+                    continue
+                # get connection weight
+                connection_weight = current_node.get_connections().get(connection_end_node_name)
+                # check if the current connection is part of the result path and color it
+                # if that is the case
+                if (current_node.get_name(), connection_end_node_name) in result_path or (connection_end_node_name, current_node.get_name()) in result_path:
+                    plot.add_edge(current_node.get_name(), connection_end_node_name,
+                                  label=connection_weight, color="r")
+                else:
+                    plot.add_edge(current_node.get_name(), connection_end_node_name,
+                                  label=connection_weight, color="black")
 
-        # create color map to give start point a different look
-        color_map = len(self.__node_dic)*['green']
-        color_map[ord(self.__start_node.get_name())-97] = 'red'
+        # create color map to coloar all nodes green and make start and selected end node red
+        node_color_map = len(self.__node_dic)*['green']
+        start_node_index = list(self.__node_dic.keys()).index(self.__start_node.get_name())
+        node_color_map[start_node_index] = 'red'
+        end_node_index = list(self.__node_dic.keys()).index(end_node_name)
+        node_color_map[end_node_index] = 'red'
         # get edge labels
         labels = nx.get_edge_attributes(plot, 'label')
+        # create default edge color map
+        edge_color_map = len(labels)*['black']
+
         # position nodes circular
         pos = nx.circular_layout(plot)
+
+        # get edges color map
+        edges = plot.edges()
+        edge_color_map = [plot[u][v]['color'] for u, v in edges]
+
         # plot node diagram
-        nx.draw(plot, pos, node_color=color_map, with_labels=True)
+        nx.draw(plot, pos, node_color=node_color_map, with_labels=True, edge_color=edge_color_map)
         nx.draw_networkx_edge_labels(plot, pos, edge_labels=labels)
         plt.draw()
         plt.show()
